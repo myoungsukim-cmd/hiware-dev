@@ -1,0 +1,7 @@
+node_modules/
+.env
+docker/mysql/.env
+*.log
+.DS_Store
+output/
+scripts/verify/output/

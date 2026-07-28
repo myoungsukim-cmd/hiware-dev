@@ -1,0 +1,82 @@
+# =============================================================================
+# HIWARE Slack 결재봇 — App Manifest
+# =============================================================================
+#
+# 【이 파일의 역할】
+#   Slack App "뼈대"만 정의합니다. DM/Modal UI는 Slack에 만들지 않습니다.
+#   메시지·Modal Block Kit은 백엔드 src/slack/blockKit.js 가 생성합니다.
+#
+# 【request_url = 백엔드 서버만】 (HIWARE URL 아님)
+#   Slack → [HTTPS] → ALB(Route53 도메인) → 백엔드 Node.js :3000
+#   경로 /slack/actions 는 src/routes/slack.routes.js 와 일치해야 함
+#
+#   예시 (ALB + Route53 + ACM 인증서):
+#     request_url: https://approval.example.com/slack/actions
+#
+#   ※ Slack Interactivity 는 공인 HTTPS 필수 (자체서명 인증서 불가)
+#   ※ HIWARE(172.25.2.101) 는 .env HIWARE_BASE_URL 로 별도 설정
+#      HIWARE 자체서명 → HIWARE_INSECURE=true
+#
+# 【manifest 로 자동 설정되는 것】
+#   - 봇 이름, Bot Scopes, Interactivity ON
+#
+# 【manifest 이후 직접 할 것】
+#   - 백엔드 배포 (npm start + npm run worker 또는 PM2)
+#   - ALB Health Check: GET /health
+#   - npm run slack:test-dm 으로 DM → Modal E2E 확인
+#
+# 【Socket Mode】
+#   socket_mode_enabled: false — ALB 공개 URL 방식 사용 (운영 권장)
+#
+# =============================================================================
+
+display_information:
+  # 워크스페이스 앱 목록·DM에 표시되는 이름
+  name: HIWARE 결재봇
+  description: |
+    HIWARE 결재 문서를 Slack DM으로 받고 Modal에서 승인/반려합니다.
+    UI(메시지·Modal)는 백엔드가 Block Kit으로 생성합니다.
+  background_color: "#2c2d30"
+
+features:
+  bot_user:
+    # DM 발송 주체 — chat:write, im:write scope 필요
+    display_name: HIWARE 결재봇
+    always_online: true
+
+oauth_config:
+  scopes:
+    bot:
+      # chat:write   — 결재 DM 발송, 처리 결과 메시지
+      - chat:write
+      # im:write     — 사용자 DM 채널 열기 (conversations.open)
+      - im:write
+      # users:read   — Slack 사용자 정보 조회
+      - users:read
+      # users:read.email — HIWARE email ↔ Slack user_id 매핑
+      - users:read.email
+
+settings:
+  interactivity:
+    is_enabled: true
+    # ┌─────────────────────────────────────────────────────────────────────
+    # │ ★ 배포 전 반드시 수정: YOUR-DOMAIN → 인프라팀 발급 도메인
+    # │                                                                     
+    # │ Slack 이 버튼 클릭·Modal 승인/반려 시 POST 하는 백엔드 URL                  
+    # │   - [상세/처리하기]  → approval_open_modal                             
+    # │   - Modal [승인]/[반려] → approval_assent / approval_reject           
+    # │                                                                     
+    # │ ALB: 443 HTTPS(ACM) → Target Group 백엔드:3000                        
+    # │ 백엔드 .env: TRUST_PROXY=true (ALB 뒤에서 권장)                          
+    # └─────────────────────────────────────────────────────────────────────
+    request_url: https://YOUR-DOMAIN/slack/actions
+
+  # Enterprise Grid 조직 배포 — 일반 워크스페이스는 false
+  org_deploy_enabled: false
+
+  # false = Request URL 방식 (ALB 공개 엔드포인트, 운영 환경)
+  # true  = Socket Mode (ngrok/로컬 개발용, 별도 App-Level Token 필요)
+  socket_mode_enabled: false
+
+  # 토큰 로테이션 — 단순 운영은 false, Bot Token .env 수동 관리
+  token_rotation_enabled: false

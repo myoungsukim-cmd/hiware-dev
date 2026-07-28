@@ -1,0 +1,37 @@
+{
+  "name": "slack-hiware-approval",
+  "version": "0.2.0",
+  "private": true,
+  "description": "HIWARE 결재 ↔ Slack 연동 백엔드",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "bash setup.sh",
+    "docker:install": "bash scripts/install-docker.sh",
+    "db:mysql:up": "bash scripts/mysql-docker.sh up",
+    "db:mysql:down": "bash scripts/mysql-docker.sh down",
+    "db:mysql:status": "bash scripts/mysql-docker.sh status",
+    "db:mysql:logs": "bash scripts/mysql-docker.sh logs",
+    "start": "node src/server.js",
+    "worker": "node src/worker.js",
+    "db:init": "node scripts/db-init.js",
+    "db:migrate": "node scripts/db-init.js --migrate-only",
+    "db:status": "node scripts/db-status.js",
+    "slack:test-dm": "node scripts/send-test-dm.js",
+    "verify": "node scripts/verify/run.js",
+    "verify:env": "node scripts/verify/01-env.js",
+    "verify:hiware": "node scripts/verify/run.js -- 02 05",
+    "verify:db": "node scripts/verify/06-db.js",
+    "verify:scenario": "node scripts/verify/scenario-poc.js",
+    "verify:scenario-a": "POC_SCENARIO=A node scripts/verify/scenario-poc.js",
+    "verify:scenario-b": "POC_SCENARIO=B node scripts/verify/scenario-poc.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.12.0",
+    "undici": "^6.21.2"
+  }
+}

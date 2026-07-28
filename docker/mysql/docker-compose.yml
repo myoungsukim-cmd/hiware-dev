@@ -1,0 +1,46 @@
+# MySQL 8 — slack-hiware-approval
+#
+# 시작:
+#   cp docker/mysql/.env.example docker/mysql/.env && vi docker/mysql/.env
+#   npm run db:mysql:up
+#   npm run db:init
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: slack-hiware-mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD required}
+      MYSQL_DATABASE: ${DB_CATALOG:-slack_hiware_approval}
+      MYSQL_USER: ${DB_USERNAME:-slack_hiware}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
+      TZ: Asia/Seoul
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-u",
+          "root",
+          "-p${DB_ROOT_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+volumes:
+  mysql_data:
+    name: slack_hiware_mysql_data

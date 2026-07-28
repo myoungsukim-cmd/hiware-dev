@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Slack 결재 UI 샘플 — HIWARE Approval</title>
+  <style>
+    :root {
+      --slack-bg: #1a1d21;
+      --slack-sidebar: #19171d;
+      --slack-panel: #1a1d21;
+      --slack-msg: #222529;
+      --slack-border: #35373b;
+      --slack-text: #d1d2d3;
+      --slack-muted: #ababad;
+      --slack-link: #1d9bd1;
+      --slack-green: #007a5a;
+      --slack-green-hover: #148567;
+      --slack-red: #e01e5a;
+      --slack-red-hover: #c4124a;
+      --slack-blue: #1264a3;
+      --slack-input: #222529;
+      --slack-modal: #1a1d21;
+      --page-bg: #0e1114;
+      --accent: #4a154b;
+      --font: "Lato", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--page-bg);
+      color: var(--slack-text);
+      min-height: 100vh;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 260px 1fr 340px;
+      min-height: 100vh;
+    }
+
+    /* ── Left nav ── */
+    .nav {
+      background: var(--slack-sidebar);
+      border-right: 1px solid var(--slack-border);
+      padding: 16px 0;
+      overflow-y: auto;
+    }
+    .nav h1 {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0 16px 12px;
+      margin: 0;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .nav h1 span { color: #ecb22e; }
+    .nav .group {
+      margin-bottom: 18px;
+    }
+    .nav .group-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--slack-muted);
+      padding: 4px 16px 6px;
+      letter-spacing: 0.04em;
+    }
+    .nav button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--slack-text);
+      font: inherit;
+      font-size: 13px;
+      padding: 7px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+    }
+    .nav button:hover { background: rgba(255,255,255,0.06); }
+    .nav button.active {
+      background: rgba(255,255,255,0.1);
+      border-left-color: #1264a3;
+      color: #fff;
+      font-weight: 600;
+    }
+    .nav button small {
+      display: block;
+      color: var(--slack-muted);
+      font-weight: 400;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    /* ── Main preview ── */
+    .preview {
+      display: flex;
+      flex-direction: column;
+      background: var(--slack-panel);
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--slack-border);
+      background: #1a1d21;
+    }
+    .preview-header .channel {
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+    }
+    .preview-header .badge {
+      font-size: 11px;
+      background: #2c2d30;
+      color: var(--slack-muted);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .preview-body {
+      flex: 1;
+      padding: 24px 28px;
+      overflow-y: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    /* Slack message bubble */
+    .slack-msg {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      gap: 10px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, #4a154b, #1264a3);
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .msg-body { flex: 1; min-width: 0; }
+    .msg-meta {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .msg-meta .bot-name {
+      font-weight: 700;
+      color: #fff;
+      margin-right: 6px;
+    }
+    .msg-meta .app-badge {
+      font-size: 10px;
+      background: #565856;
+      color: #fff;
+      padding: 1px 4px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .msg-meta .time { color: var(--slack-muted); }
+
+    .block-section {
+      background: transparent;
+      font-size: 15px;
+      line-height: 1.46668;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .block-section b,
+    .block-section strong { font-weight: 700; color: #fff; }
+
+    .block-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0 12px;
+      height: 28px;
+      border-radius: 4px;
+      border: none;
+      cursor: default;
+      color: #fff;
+    }
+    .btn-primary { background: var(--slack-green); }
+    .btn-danger { background: var(--slack-red); }
+    .btn-default {
+      background: #222529;
+      border: 1px solid #565856;
+      color: #fff;
+    }
+
+    /* Modal */
+    .slack-modal-wrap {
+      width: 100%;
+      max-width: 520px;
+    }
+    .slack-modal {
+      background: #1a1d21;
+      border: 1px solid var(--slack-border);
+      border-radius: 8px;
+      box-shadow: 0 0 0 1px rgba(29,28,29,0.13), 0 18px 48px rgba(0,0,0,0.55);
+      overflow: hidden;
+    }
+    .modal-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--slack-border);
+    }
+    .modal-titlebar h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 900;
+      color: #fff;
+    }
+    .modal-close {
+      color: var(--slack-muted);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .modal-content { padding: 16px 20px 20px; }
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+    .field .val {
+      font-size: 14px;
+      color: var(--slack-text);
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .section-block {
+      margin-bottom: 16px;
+    }
+    .section-block > label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .section-block .val {
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      color: var(--slack-text);
+    }
+    .input-block { margin-bottom: 16px; }
+    .input-block > label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .input-block textarea,
+    .input-block input {
+      width: 100%;
+      background: var(--slack-input);
+      border: 1px solid #565856;
+      border-radius: 4px;
+      color: var(--slack-text);
+      font: inherit;
+      font-size: 14px;
+      padding: 8px 12px;
+      resize: vertical;
+      outline: none;
+    }
+    .input-block textarea::placeholder,
+    .input-block input::placeholder { color: #717274; }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      padding: 12px 20px;
+      border-top: 1px solid var(--slack-border);
+      background: #222529;
+    }
+    .status-msg {
+      font-size: 15px;
+      line-height: 1.5;
+      padding: 8px 0;
+    }
+
+    /* ── Right: API sample ── */
+    .api-panel {
+      background: #121417;
+      border-left: 1px solid var(--slack-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .api-panel header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--slack-border);
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .api-panel header code {
+      display: block;
+      margin-top: 4px;
+      font-weight: 400;
+      color: var(--slack-link);
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .api-panel pre {
+      margin: 0;
+      padding: 14px;
+      flex: 1;
+      overflow: auto;
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: #c5c8ce;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .api-panel .key { color: #9cdcfe; }
+    .api-panel .str { color: #ce9178; }
+    .api-panel .num { color: #b5cea8; }
+
+    .hint {
+      padding: 10px 14px;
+      border-top: 1px solid var(--slack-border);
+      font-size: 11px;
+      color: var(--slack-muted);
+      line-height: 1.4;
+    }
+
+    .data-switch {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--slack-border);
+      flex-wrap: wrap;
+    }
+    .data-switch button {
+      font: inherit;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #565856;
+      background: transparent;
+      color: var(--slack-muted);
+      cursor: pointer;
+    }
+    .data-switch button.active {
+      background: #1264a3;
+      border-color: #1264a3;
+      color: #fff;
+    }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 220px 1fr; }
+      .api-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="nav">
+      <h1>Slack 결재 UI <span>샘플</span></h1>
+
+      <div class="group">
+        <div class="group-title">결재자 DM</div>
+        <button class="active" data-view="dm-request">
+          결재 요청
+          <small>buildApprovalDm</small>
+        </button>
+        <button data-view="dm-reminder">
+          결재 리마인더
+          <small>buildReminderDmBlocks</small>
+        </button>
+      </div>
+
+      <div class="group">
+        <div class="group-title">처리 Modal</div>
+        <button data-view="modal-detail">
+          상세/처리
+          <small>buildApprovalDetailModal</small>
+        </button>
+        <button data-view="modal-detail-pwd">
+          상세/처리 (+비밀번호)
+          <small>requireApvUserPwd</small>
+        </button>
+        <button data-view="modal-processing">
+          처리 중
+          <small>buildProcessingModal</small>
+        </button>
+        <button data-view="modal-completed">
+          처리 완료
+          <small>buildCompletedModal</small>
+        </button>
+        <button data-view="modal-error">
+          오류
+          <small>buildErrorModal</small>
+        </button>
+      </div>
+
+      <div class="group">
+        <div class="group-title">처리 후 DM</div>
+        <button data-view="dm-completed">
+          처리자 본인 완료
+          <small>buildCompletedDmBlocks</small>
+        </button>
+        <button data-view="dm-skipped">
+          ANY_ONE 스킵
+          <small>buildSkippedByOtherDmBlocks</small>
+        </button>
+        <button data-view="dm-closed">
+          반려 종료
+          <small>buildClosedRejectedDmBlocks</small>
+        </button>
+      </div>
+
+      <div class="group">
+        <div class="group-title">기안자 알림</div>
+        <button data-view="dm-final-ok">
+          최종 승인
+          <small>FINAL_APPROVED</small>
+        </button>
+        <button data-view="dm-final-reject">
+          반려
+          <small>REJECTED</small>
+        </button>
+      </div>
+    </nav>
+
+    <main class="preview">
+      <div class="preview-header">
+        <span class="channel" id="channelLabel">앱과의 메시지</span>
+        <span class="badge" id="viewLabel">결재 요청 DM</span>
+      </div>
+      <div class="preview-body" id="previewBody"></div>
+    </main>
+
+    <aside class="api-panel">
+      <header>
+        예상 API 응답 샘플
+        <code id="apiEndpoint">GET /approval/aplt/{apvApltNo}</code>
+      </header>
+      <div class="data-switch" id="dataSwitch"></div>
+      <pre id="apiJson"></pre>
+      <div class="hint" id="apiHint">
+        실제 앱은 양식별로 UI를 나누지 않고, HIWARE <code>htmlCnts</code>/<code>summaryContents</code>를 그대로 평문 변환해 표시합니다.
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    /** HIWARE 결재 상세 샘플 — 양식은 htmlCnts 내용만 다름 (UI 분기는 없음). 다건은 목록/테이블로 표시됨 */
+    const SAMPLE_DETAILS = {
+      account: {
+        label: "시스템 계정",
+        apvApltNo: "202607200012",
+        apvTitle: "시스템 계정 신청 (DEV)",
+        apvReqUserInfo: "김기안 (kim.draft)",
+        apvReqDttm: "2026.07.20 09:15",
+        apvApltStateCodeNm: "결재 대기",
+        summaryContents: "시스템 계정 신규 신청 — DEV / 일반사용자 / 2026.07.21 ~ 2026.08.20",
+        htmlCnts: `
+          <table>
+            <tr><th>신청 유형</th><td>시스템 계정 신규</td></tr>
+            <tr><th>대상 시스템</th><td>HIWARE DEV</td></tr>
+            <tr><th>계정 ID</th><td>kim.draft</td></tr>
+            <tr><th>권한</th><td>일반 사용자</td></tr>
+            <tr><th>사용 기간</th><td>2026.07.21 ~ 2026.08.20</td></tr>
+            <tr><th>사유</th><td>프로젝트 PoC 검증용 계정 필요</td></tr>
+          </table>
+        `,
+      },
+      server: {
+        label: "서버 접근 (다건)",
+        apvApltNo: "202607200101",
+        apvTitle: "서버 접근 권한 신청",
+        apvReqUserInfo: "이서버 (lee.srv)",
+        apvReqDttm: "2026.07.20 10:05",
+        apvApltStateCodeNm: "결재 대기",
+        summaryContents: "서버 접근 권한 신청 3건 — was-dev-01, was-dev-02, batch-dev-01 (기간 7일)",
+        htmlCnts: `
+          <p><b>신청 개요</b></p>
+          <table>
+            <tr><th>신청 유형</th><td>서버 접근 권한</td></tr>
+            <tr><th>접근 방식</th><td>SSH (계정 접속)</td></tr>
+            <tr><th>권한</th><td>일반 사용자</td></tr>
+            <tr><th>사용 기간</th><td>2026.07.21 ~ 2026.07.27</td></tr>
+            <tr><th>사유</th><td>배포 검증 및 로그 확인</td></tr>
+          </table>
+          <p><b>대상 서버 (3건)</b></p>
+          <table>
+            <tr><th>No</th><th>호스트명</th><th>IP</th><th>OS</th><th>환경</th></tr>
+            <tr><td>1</td><td>was-dev-01</td><td>10.20.30.11</td><td>RHEL 8</td><td>DEV</td></tr>
+            <tr><td>2</td><td>was-dev-02</td><td>10.20.30.12</td><td>RHEL 8</td><td>DEV</td></tr>
+            <tr><td>3</td><td>batch-dev-01</td><td>10.20.30.21</td><td>RHEL 8</td><td>DEV</td></tr>
+          </table>
+        `,
+      },
+      command: {
+        label: "명령어 (다건)",
+        apvApltNo: "202607200102",
+        apvTitle: "서버 명령어 실행 권한 신청",
+        apvReqUserInfo: "박명령 (park.cmd)",
+        apvReqDttm: "2026.07.20 10:18",
+        apvApltStateCodeNm: "결재 대기",
+        summaryContents: "명령어 실행 권한 3건 — systemctl, journalctl, docker ps (was-dev-01 외 2대)",
+        htmlCnts: `
+          <p><b>신청 개요</b></p>
+          <table>
+            <tr><th>신청 유형</th><td>명령어 실행 권한</td></tr>
+            <tr><th>대상 서버</th><td>was-dev-01, was-dev-02, batch-dev-01</td></tr>
+            <tr><th>사용 기간</th><td>2026.07.21 ~ 2026.07.23</td></tr>
+            <tr><th>사유</th><td>서비스 재기동 및 장애 로그 확인</td></tr>
+          </table>
+          <p><b>신청 명령어 (3건)</b></p>
+          <table>
+            <tr><th>No</th><th>명령어</th><th>위험도</th><th>허용 여부</th></tr>
+            <tr><td>1</td><td>systemctl restart hiware-was</td><td>중</td><td>허용</td></tr>
+            <tr><td>2</td><td>journalctl -u hiware-was -n 200</td><td>낮음</td><td>허용</td></tr>
+            <tr><td>3</td><td>docker ps -a</td><td>낮음</td><td>허용</td></tr>
+          </table>
+        `,
+      },
+      dbAccess: {
+        label: "DB 접근 (다건)",
+        apvApltNo: "202607200103",
+        apvTitle: "DB 접근 권한 신청",
+        apvReqUserInfo: "최디비 (choi.db)",
+        apvReqDttm: "2026.07.20 11:02",
+        apvApltStateCodeNm: "결재 대기",
+        summaryContents: "DB 접근 권한 신청 4건 — hiware_dev, audit_dev, log_dev, batch_dev (ReadOnly)",
+        htmlCnts: `
+          <p><b>신청 개요</b></p>
+          <table>
+            <tr><th>신청 유형</th><td>DB 접근 권한</td></tr>
+            <tr><th>권한</th><td>ReadOnly</td></tr>
+            <tr><th>접속 도구</th><td>HIWARE DB Gateway</td></tr>
+            <tr><th>사용 기간</th><td>2026.07.21 ~ 2026.07.27</td></tr>
+            <tr><th>사유</th><td>데이터 정합성 점검 및 장애 원인 분석</td></tr>
+          </table>
+          <p><b>대상 DB (4건)</b></p>
+          <table>
+            <tr><th>No</th><th>DB명</th><th>호스트</th><th>포트</th><th>엔진</th><th>환경</th></tr>
+            <tr><td>1</td><td>hiware_dev</td><td>db-dev-01</td><td>3306</td><td>MySQL 8</td><td>DEV</td></tr>
+            <tr><td>2</td><td>audit_dev</td><td>db-dev-01</td><td>3306</td><td>MySQL 8</td><td>DEV</td></tr>
+            <tr><td>3</td><td>log_dev</td><td>db-dev-02</td><td>3306</td><td>MySQL 8</td><td>DEV</td></tr>
+            <tr><td>4</td><td>batch_dev</td><td>db-dev-02</td><td>3306</td><td>MySQL 8</td><td>DEV</td></tr>
+          </table>
+        `,
+      },
+      dbSql: {
+        label: "DB SQL 권한 (1건)",
+        apvApltNo: "202607200104",
+        apvTitle: "DB SQL 권한 신청",
+        apvReqUserInfo: "정쿼리 (jung.sql)",
+        apvReqDttm: "2026.07.20 11:30",
+        apvApltStateCodeNm: "결재 대기",
+        summaryContents: "DB SQL 권한 1건 — hiware_dev / SELECT (tb_user, tb_approval)",
+        htmlCnts: `
+          <p><b>신청 개요</b></p>
+          <table>
+            <tr><th>신청 유형</th><td>DB SQL 권한</td></tr>
+            <tr><th>대상 DB</th><td>hiware_dev (db-dev-01:3306)</td></tr>
+            <tr><th>사용 기간</th><td>2026.07.21 ~ 2026.07.23</td></tr>
+            <tr><th>사유</th><td>결재 이력 조회용 SELECT 권한 필요</td></tr>
+          </table>
+          <p><b>신청 SQL 권한 (1건)</b></p>
+          <table>
+            <tr><th>No</th><th>권한</th><th>대상 테이블</th><th>비고</th></tr>
+            <tr><td>1</td><td>SELECT</td><td>tb_user, tb_approval</td><td>조회 전용 / DML·DDL 불가</td></tr>
+          </table>
+        `,
+      },
+    };
+
+    /** htmlCnts → 평문 (htmlToText.js 단순 모사) — 다건 테이블은 행 단위로 줄바꿈 */
+    function htmlToPlainText(html, max = 2000) {
+      if (!html) return "-";
+      let t = String(html)
+        .replace(/<\/(p|div|li|h[1-6]|table)>/gi, "\n")
+        .replace(/<\/tr>/gi, "\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/t[hd]>/gi, " | ")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/[ \t]+\|[ \t]+/g, " | ")
+        .replace(/\|[ \t]*\n/g, "\n")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (t.length > max) t = t.slice(0, max) + "…";
+      return t || "-";
+    }
+
+    function truncate(s, n) {
+      s = String(s || "");
+      return s.length > n ? s.slice(0, n) + "…" : s;
+    }
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    /** mrkdwn *bold* → HTML */
+    function mrkdwn(text) {
+      return esc(text).replace(/\*([^*]+)\*/g, "<strong>$1</strong>");
+    }
+
+    let currentDetailKey = "account";
+    let currentView = "dm-request";
+
+    function detail() {
+      return SAMPLE_DETAILS[currentDetailKey];
+    }
+
+    function renderMsg(innerHtml) {
+      return `
+        <div class="slack-msg">
+          <div class="avatar">H</div>
+          <div class="msg-body">
+            <div class="msg-meta">
+              <span class="bot-name">HIWARE Approval</span>
+              <span class="app-badge">앱</span>
+              <span class="time">오전 10:15</span>
+            </div>
+            ${innerHtml}
+          </div>
+        </div>`;
+    }
+
+    function renderModal(title, bodyHtml, { footerClose = true } = {}) {
+      return `
+        <div class="slack-modal-wrap">
+          <div class="slack-modal">
+            <div class="modal-titlebar">
+              <h2>${esc(truncate(title, 24))}</h2>
+              <span class="modal-close">×</span>
+            </div>
+            <div class="modal-content">${bodyHtml}</div>
+            ${footerClose ? `<div class="modal-footer"><button class="btn btn-default">닫기</button></div>` : ""}
+          </div>
+        </div>`;
+    }
+
+    const VIEWS = {
+      "dm-request": {
+        label: "결재 요청 DM",
+        channel: "앱과의 메시지",
+        endpoint: "GET /approval/aplt/{apvApltNo}  →  buildApprovalDm",
+        hint: "폴링으로 intray 신규 건 발견 후 결재자 Slack DM 발송. 버튼 value = apvApltNo.",
+        render() {
+          const d = detail();
+          const summary = truncate(d.summaryContents || d.apvTitle, 300);
+          const text = [
+            "*[결재 요청]*",
+            `*제목:* ${d.apvTitle}`,
+            `*기안자:* ${d.apvReqUserInfo}`,
+            `*요청일시:* ${d.apvReqDttm}`,
+            `*상태:* ${d.apvApltStateCodeNm}`,
+            `*내용:* ${summary}`,
+          ].join("\n");
+          return renderMsg(`
+            <div class="block-section">${mrkdwn(text)}</div>
+            <div class="block-actions">
+              <button class="btn btn-primary">상세/처리하기</button>
+            </div>`);
+        },
+      },
+
+      "dm-reminder": {
+        label: "결재 리마인더 DM",
+        channel: "앱과의 메시지",
+        endpoint: "리마인더 Job  →  buildReminderDmBlocks",
+        hint: "미처리 건에 대해 N회차 재알림. 버튼은 유지되고 헤더만 변경됩니다.",
+        render() {
+          const d = detail();
+          const summary = truncate(d.summaryContents || d.apvTitle, 300);
+          const text = [
+            "*:bell: [결재 리마인더 2회차]*",
+            `*제목:* ${d.apvTitle}`,
+            `*기안자:* ${d.apvReqUserInfo}`,
+            `*요청일시:* ${d.apvReqDttm}`,
+            `*상태:* ${d.apvApltStateCodeNm}`,
+            `*내용:* ${summary}`,
+          ].join("\n");
+          return renderMsg(`
+            <div class="block-section">${mrkdwn(text).replace(":bell:", "🔔")}</div>
+            <div class="block-actions">
+              <button class="btn btn-primary">상세/처리하기</button>
+            </div>`);
+        },
+      },
+
+      "modal-detail": {
+        label: "상세/처리 Modal",
+        channel: "Modal",
+        endpoint: "views.open  ←  buildApprovalDetailModal",
+        hint: "상세/처리하기 클릭 시 상세 재조회 후 Modal 오픈. callback_id = approval_action_modal.",
+        render() {
+          return detailModal(false);
+        },
+      },
+
+      "modal-detail-pwd": {
+        label: "상세/처리 Modal (+비밀번호)",
+        channel: "Modal",
+        endpoint: "APPROVAL_REQUIRE_APV_USER_PWD=true",
+        hint: "비밀번호는 Modal state로만 전달되며 DB/로그에 저장하지 않습니다.",
+        render() {
+          return detailModal(true);
+        },
+      },
+
+      "modal-processing": {
+        label: "처리 중 Modal",
+        channel: "Modal",
+        endpoint: "views.update  ←  buildProcessingModal",
+        hint: "승인/반려 클릭 직후 Job enqueue 전에 표시.",
+        render() {
+          return renderModal("처리 중", `
+            <div class="status-msg">⏳ <strong>결재 처리 중입니다.</strong><br/>잠시 후 결과가 표시됩니다.</div>`);
+        },
+      },
+
+      "modal-completed": {
+        label: "처리 완료 Modal",
+        channel: "Modal",
+        endpoint: "views.update  ←  buildCompletedModal",
+        hint: "HIWARE applyApv 성공 후 표시. actionLabel = 승인 | 반려.",
+        render() {
+          return renderModal("처리 완료", `
+            <div class="status-msg">✅ <strong>승인 처리 완료</strong></div>`);
+        },
+      },
+
+      "modal-error": {
+        label: "오류 Modal",
+        channel: "Modal",
+        endpoint: "views.update  ←  buildErrorModal",
+        hint: "코멘트 길이 부족, HIWARE 오류, 중복 처리 등.",
+        render() {
+          return renderModal("오류", `
+            <div class="status-msg">⚠️ 결재 코멘트를 5자 이상 입력하세요.</div>`);
+        },
+      },
+
+      "dm-completed": {
+        label: "처리자 본인 완료 DM",
+        channel: "앱과의 메시지",
+        endpoint: "chat.update  ←  buildCompletedDmBlocks",
+        hint: "처리 성공 후 원래 DM 메시지를 버튼 없는 완료 메시지로 갱신.",
+        render() {
+          const d = detail();
+          const text = [
+            "*[결재 처리 완료]*",
+            `*제목:* ${d.apvTitle}`,
+            "*처리자:* 최결재 (choi.apv)",
+            "*처리결과:* 승인",
+            "*처리일시:* 2026.07.20 10:22",
+            "*코멘트:* 사용 기간·사유 확인했습니다. 승인합니다.",
+          ].join("\n");
+          return renderMsg(`<div class="block-section">${mrkdwn(text)}</div>`);
+        },
+      },
+
+      "dm-skipped": {
+        label: "ANY_ONE 스킵 DM",
+        channel: "앱과의 메시지",
+        endpoint: "chat.update  ←  buildSkippedByOtherDmBlocks",
+        hint: "동일 step 병렬 결재자 중 다른 사람이 먼저 처리한 경우.",
+        render() {
+          const d = detail();
+          const text = [
+            "*[결재 처리 완료]*",
+            `*제목:* ${d.apvTitle}`,
+            "*안내:* 이 결재는 다른 결재자가 이미 처리했습니다.",
+            "*처리자:* 최결재 (choi.apv)",
+            "*처리결과:* 승인",
+            "*처리일시:* 2026.07.20 10:22",
+          ].join("\n");
+          return renderMsg(`<div class="block-section">${mrkdwn(text)}</div>`);
+        },
+      },
+
+      "dm-closed": {
+        label: "반려 종료 DM",
+        channel: "앱과의 메시지",
+        endpoint: "chat.update  ←  buildClosedRejectedDmBlocks",
+        hint: "다른 결재자가 반려하여 문서가 종료된 경우 남은 결재자 DM.",
+        render() {
+          const d = detail();
+          const text = [
+            "*[결재 종료]*",
+            `*제목:* ${d.apvTitle}`,
+            "*안내:* 이 결재는 반려되어 더 이상 처리할 수 없습니다.",
+            "*처리자:* 최결재 (choi.apv)",
+            "*처리일시:* 2026.07.20 10:25",
+          ].join("\n");
+          return renderMsg(`<div class="block-section">${mrkdwn(text)}</div>`);
+        },
+      },
+
+      "dm-final-ok": {
+        label: "기안자 최종 승인 DM",
+        channel: "앱과의 메시지",
+        endpoint: "chat.postMessage  ←  buildRequesterFinalDmBlocks (FINAL_APPROVED)",
+        hint: "최종 승인 완료 시 기안자에게 별도 DM.",
+        render() {
+          const d = detail();
+          const text = [
+            "*[결재 최종 승인]*",
+            `*제목:* ${d.apvTitle}`,
+            `*기안자:* ${d.apvReqUserInfo}`,
+            "*최종 처리자:* 최결재 (choi.apv)",
+            "*완료일시:* 2026.07.20 10:22",
+            "*코멘트:* 사용 기간·사유 확인했습니다. 승인합니다.",
+          ].join("\n");
+          return renderMsg(`<div class="block-section">${mrkdwn(text)}</div>`);
+        },
+      },
+
+      "dm-final-reject": {
+        label: "기안자 반려 DM",
+        channel: "앱과의 메시지",
+        endpoint: "chat.postMessage  ←  buildRequesterFinalDmBlocks (REJECTED)",
+        hint: "반려 시 기안자에게 별도 DM. 코멘트 → 반려 사유로 표시.",
+        render() {
+          const d = detail();
+          const text = [
+            "*[결재 반려]*",
+            `*제목:* ${d.apvTitle}`,
+            `*기안자:* ${d.apvReqUserInfo}`,
+            "*반려자:* 최결재 (choi.apv)",
+            "*반려일시:* 2026.07.20 10:25",
+            "*반려 사유:* 사용 기간이 과도합니다. 7일 이내로 재신청 부탁드립니다.",
+          ].join("\n");
+          return renderMsg(`<div class="block-section">${mrkdwn(text)}</div>`);
+        },
+      },
+    };
+
+    function detailModal(withPwd) {
+      const d = detail();
+      const summary = truncate(d.summaryContents || d.apvTitle || "-", 500);
+      const detailText = htmlToPlainText(d.htmlCnts, 2000);
+      const pwd = withPwd
+        ? `<div class="input-block">
+             <label>HIWARE 결재 비밀번호</label>
+             <input type="password" placeholder="결재 비밀번호 (DB/로그 저장 안 함)" />
+           </div>`
+        : "";
+      return renderModal(d.apvTitle, `
+        <div class="fields">
+          <div class="field"><label>제목</label><div class="val">${esc(d.apvTitle)}</div></div>
+          <div class="field"><label>기안자</label><div class="val">${esc(d.apvReqUserInfo)}</div></div>
+          <div class="field"><label>요청일시</label><div class="val">${esc(d.apvReqDttm)}</div></div>
+          <div class="field"><label>결재번호</label><div class="val">${esc(d.apvApltNo)}</div></div>
+        </div>
+        <div class="section-block">
+          <label>내용</label>
+          <div class="val">${esc(summary)}</div>
+        </div>
+        <div class="section-block">
+          <label>상세 내용</label>
+          <div class="val">${esc(detailText)}</div>
+        </div>
+        <div class="input-block">
+          <label>결재 코멘트</label>
+          <textarea rows="3" placeholder="승인/반려 코멘트를 5자 이상 입력하세요"></textarea>
+        </div>
+        ${pwd}
+        <div class="modal-actions">
+          <button class="btn btn-primary">승인</button>
+          <button class="btn btn-danger">반려</button>
+        </div>
+      `, { footerClose: true });
+    }
+
+    function apiPayload() {
+      const d = detail();
+      const applySample = {
+        apvApltNo: d.apvApltNo,
+        apvApplyType: "Assent",
+        apvComment: "사용 기간·사유 확인했습니다. 승인합니다.",
+      };
+
+      if (currentView.startsWith("dm-final") || currentView === "dm-completed") {
+        return {
+          endpoint: "POST /approval/aplt/applyApv",
+          body: [applySample],
+          note: "성공 코드 00/16 → DM 갱신 및 기안자 알림",
+        };
+      }
+
+      if (currentView === "dm-request" || currentView === "dm-reminder") {
+        return {
+          endpoint: "GET /approval/auth-box/intray → GET /approval/aplt/{no}",
+          intrayRow: {
+            apvApltNo: d.apvApltNo,
+            apvReqTitleNm: d.apvTitle,
+            apvReqUserNm: d.apvReqUserInfo,
+            apvReqDttm: d.apvReqDttm,
+            apvApltStateCodeNm: d.apvApltStateCodeNm,
+          },
+          detail: {
+            apvApltNo: d.apvApltNo,
+            apvTitle: d.apvTitle,
+            apvReqUserInfo: d.apvReqUserInfo,
+            apvReqDttm: d.apvReqDttm,
+            summaryContents: d.summaryContents,
+            htmlCnts: d.htmlCnts.trim().replace(/\s+/g, " ").slice(0, 120) + "…",
+            apvApltStateCodeNm: d.apvApltStateCodeNm,
+          },
+        };
+      }
+
+      return {
+        endpoint: "GET /approval/aplt/" + d.apvApltNo,
+        content: {
+          apvApltNo: d.apvApltNo,
+          apvTitle: d.apvTitle,
+          apvReqUserInfo: d.apvReqUserInfo,
+          apvReqDttm: d.apvReqDttm,
+          summaryContents: d.summaryContents,
+          htmlCnts: d.htmlCnts.trim(),
+          apvApltStateCodeNm: d.apvApltStateCodeNm,
+        },
+        mappedApprovalDetail: {
+          apvApltNo: d.apvApltNo,
+          apvTitle: d.apvTitle,
+          apvReqUserInfo: d.apvReqUserInfo,
+          apvReqDttm: d.apvReqDttm,
+          summaryContents: d.summaryContents,
+          htmlCnts: "(HTML → 평문 변환 후 Modal 상세 내용에 표시)",
+          apvApltStateCodeNm: d.apvApltStateCodeNm,
+        },
+        private_metadata: {
+          apvApltNo: d.apvApltNo,
+          channelId: "D01234567",
+          messageTs: "1721445300.000100",
+          slackUserId: "U0APPROVER",
+        },
+      };
+    }
+
+    function syntaxHighlight(obj) {
+      const json = JSON.stringify(obj, null, 2);
+      return esc(json)
+        .replace(/&quot;([^&]+)&quot;(?=\s*:)/g, '<span class="key">&quot;$1&quot;</span>')
+        .replace(/:&quot;([\s\S]*?)&quot;/g, ':<span class="str">&quot;$1&quot;</span>')
+        .replace(/:\s*(-?\d+(\.\d+)?)/g, ':<span class="num">$1</span>');
+    }
+
+    function refresh() {
+      const view = VIEWS[currentView];
+      document.getElementById("previewBody").innerHTML = view.render();
+      document.getElementById("viewLabel").textContent = view.label;
+      document.getElementById("channelLabel").textContent = view.channel;
+      const payload = apiPayload();
+      document.getElementById("apiEndpoint").textContent = view.endpoint;
+      document.getElementById("apiJson").innerHTML = syntaxHighlight(payload);
+      document.getElementById("apiHint").innerHTML =
+        view.hint +
+        " · 샘플 데이터: <strong>" +
+        SAMPLE_DETAILS[currentDetailKey].label +
+        "</strong>";
+    }
+
+    // nav
+    document.querySelectorAll(".nav button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".nav button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentView = btn.dataset.view;
+        refresh();
+      });
+    });
+
+    // data switch
+    const switchEl = document.getElementById("dataSwitch");
+    Object.entries(SAMPLE_DETAILS).forEach(([key, val]) => {
+      const b = document.createElement("button");
+      b.textContent = val.label;
+      b.dataset.key = key;
+      if (key === currentDetailKey) b.classList.add("active");
+      b.addEventListener("click", () => {
+        currentDetailKey = key;
+        switchEl.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        refresh();
+      });
+      switchEl.appendChild(b);
+    });
+
+    refresh();
+  </script>
+</body>
+</html>
