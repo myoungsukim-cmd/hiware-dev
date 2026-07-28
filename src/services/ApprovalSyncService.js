@@ -50,7 +50,6 @@ export class ApprovalSyncService {
 
   /** 승인 후 최종 여부 — HIWARE 상세 + intray 잔존 여부 */
   async isApprovalFinal(apvApltNo, hiwareResultMessage = '') {
-    if (config.hiware.mock) return true;
     if (/완료/.test(hiwareResultMessage)) return true;
     try {
       const raw = await hiwareClient.getApprovalDetail(apvApltNo);

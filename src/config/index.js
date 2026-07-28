@@ -64,8 +64,6 @@ export const config = {
     userPwd: env('HIWARE_USER_PWD', ''),
     insecure: envBool('HIWARE_INSECURE', true),
     timeoutMs: envInt('HIWARE_TIMEOUT_MS', 120000),
-    /** PC 로컬 E2E — HIWARE 미도달 시 detail/apply stub */
-    mock: envBool('HIWARE_MOCK', false),
   },
 
   slack: {

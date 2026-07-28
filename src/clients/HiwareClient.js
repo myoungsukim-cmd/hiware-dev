@@ -3,7 +3,6 @@ import { Agent, fetch } from 'undici';
 import { config } from '../config/index.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { getMockApprovalDetail } from './mockApprovalDetails.js';
 
 const insecureDispatcher = new Agent({
   connect: { rejectUnauthorized: false },
@@ -252,34 +251,16 @@ export class HiwareClient {
   }
 
   getApprovalDetail(apvApltNo) {
-    if (config.hiware.mock) {
-      logger.info('HIWARE_MOCK getApprovalDetail', { apvApltNo });
-      return Promise.resolve({ content: getMockApprovalDetail(apvApltNo) });
-    }
     return this.request('GET', '/approval/aplt/' + apvApltNo);
   }
 
   getIntray({ userNo, start = 0, limit = 100 } = {}) {
-    if (config.hiware.mock) {
-      logger.info('HIWARE_MOCK getIntray', { userNo, start, limit });
-      return Promise.resolve({ content: [] });
-    }
     const query = { start: String(start), limit: String(limit) };
     if (userNo) query.userNo = String(userNo);
     return this.request('GET', '/approval/auth-box/intray', { query });
   }
 
   batchApplyApv(items) {
-    if (config.hiware.mock) {
-      logger.info('HIWARE_MOCK batchApplyApv', { count: (items || []).length });
-      return Promise.resolve({
-        content: (items || []).map((it) => ({
-          apvApltNo: it.apvApltNo,
-          apvApltResultCode: '00',
-          apvApltResultCodeNm: '완료',
-        })),
-      });
-    }
     return this.request('POST', '/approval/aplt/applyApv', { body: items });
   }
 }
