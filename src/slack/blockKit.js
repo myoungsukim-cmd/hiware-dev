@@ -71,7 +71,9 @@ export function buildApprovalDm({ detail, fallbackText }) {
 export function buildApprovalDetailModal(detail, { channelId, messageTs, slackUserId } = {}) {
   const title = truncate(detail.apvTitle || '결재 요청', 24);
   const summary = truncate(detail.summaryContents || detail.apvTitle || '-', 500);
-  const detailText = htmlToPlainText(detail.htmlCnts, 2000);
+  // Slack section text 최대 3000 — 상세가 길면 블록을 여러 개로 나눔
+  const detailText = htmlToPlainText(detail.htmlCnts, 12000);
+  const detailBlocks = splitDetailSections(detailText, 2800);
 
   const privateMetadata = JSON.stringify({
     apvApltNo: detail.apvApltNo,
@@ -102,10 +104,13 @@ export function buildApprovalDetailModal(detail, { channelId, messageTs, slackUs
         type: 'section',
         text: { type: 'mrkdwn', text: '*내용*\n' + summary },
       },
-      {
+      ...detailBlocks.map((chunk, i) => ({
         type: 'section',
-        text: { type: 'mrkdwn', text: '*상세 내용*\n' + detailText },
-      },
+        text: {
+          type: 'mrkdwn',
+          text: (i === 0 ? '*상세 내용*\n' : '') + chunk,
+        },
+      })),
       {
         type: 'input',
         block_id: 'approval_comment_block',
@@ -155,6 +160,35 @@ export function buildApprovalDetailModal(detail, { channelId, messageTs, slackUs
       },
     ],
   };
+}
+
+/** Slack section 3000자 제한 대비 — 줄 단위로 청크 분할 */
+function splitDetailSections(text, maxChunk) {
+  const src = String(text || '').trim() || '(내용 없음)';
+  if (src.length <= maxChunk) return [src];
+
+  const chunks = [];
+  let buf = '';
+  for (const line of src.split('\n')) {
+    const next = buf ? buf + '\n' + line : line;
+    if (next.length > maxChunk && buf) {
+      chunks.push(buf);
+      buf = line;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf) chunks.push(buf);
+
+  // 모달 블록 수 여유 (헤더/입력/버튼 포함해 대략 10개 이하 권장)
+  const MAX_CHUNKS = 6;
+  if (chunks.length > MAX_CHUNKS) {
+    const kept = chunks.slice(0, MAX_CHUNKS);
+    const last = kept[MAX_CHUNKS - 1];
+    kept[MAX_CHUNKS - 1] = last.slice(0, Math.max(0, maxChunk - 1)) + '…';
+    return kept;
+  }
+  return chunks;
 }
 
 export function buildModalStatusView(title, message, { closeLabel = '닫기' } = {}) {
