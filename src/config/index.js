@@ -87,7 +87,12 @@ export const config = {
   approval: {
     commentMinLength: envInt('APPROVAL_COMMENT_MIN_LENGTH', 5),
     defaultStep: envInt('APPROVAL_DEFAULT_STEP', 1),
-    /** false=API Token 사용 시 apvUserPwd 생략 (PoC 확정). true=Modal 비밀번호 필수 */
+    /**
+     * true=결재자 HIWARE ID/PW로 임시 로그인 후 applyApv (서비스 계정은 동기화만).
+     * false=서비스 계정 토큰으로 대리 결재 (HIWARE가 허용할 때만).
+     */
+    applyAsApprover: envBool('APPROVAL_APPLY_AS_APPROVER', true),
+    /** true=Modal 비밀번호를 applyApv body(apvUserPwd)에도 포함. applyAsApprover면 로그인에도 사용 */
     requireApvUserPwd: envBool('APPROVAL_REQUIRE_APV_USER_PWD', false),
   },
 
@@ -108,6 +113,11 @@ export const config = {
     runInitialSync: envBool('RUN_INITIAL_SYNC_ON_START', true),
   },
 };
+
+/** Modal/승인 시 HIWARE 비밀번호가 필요한지 (결재자 로그인 또는 apvUserPwd 정책) */
+export function needsApvUserPwd() {
+  return config.approval.applyAsApprover || config.approval.requireApvUserPwd;
+}
 
 export function validateApiConfig() {
   const missing = [];

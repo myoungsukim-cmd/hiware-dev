@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>htmlToPlainText — 엔티티 변환 샘플</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --card: #fff;
+      --border: #ddd;
+      --muted: #616061;
+      --slack: #1d1c1d;
+      --accent: #1264a3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--slack);
+      line-height: 1.45;
+      padding: 24px;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 1100px;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h2 {
+      font-size: 14px;
+      margin: 0 0 12px;
+      color: var(--accent);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .bad { background: #ffe6e6; color: #c00; }
+    .good { background: #e6f7e6; color: #0a7; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f8f8f8;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      margin: 0;
+    }
+    /* Slack modal-ish preview */
+    .modal {
+      max-width: 520px;
+      margin-top: 24px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+      overflow: hidden;
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+      font-weight: 700;
+    }
+    .modal-body { padding: 16px; }
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .field label { display: block; font-weight: 700; font-size: 13px; }
+    .field span { font-size: 13px; }
+    .block { margin-bottom: 16px; }
+    .block > label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+    .block .val {
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f8f8f8;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .note {
+      max-width: 1100px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <h1>상세 내용 엔티티 변환 샘플</h1>
+  <p class="sub">
+    HIWARE <code>htmlCnts</code> → <code>htmlToPlainText()</code> → Slack 모달 「상세 내용」
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>변환 전 (버그) <span class="badge bad">&#160; / &amp;lrm; 노출</span></h2>
+      <pre id="before"></pre>
+    </div>
+    <div class="card">
+      <h2>변환 후 (수정) <span class="badge good">평문</span></h2>
+      <pre id="after"></pre>
+    </div>
+  </div>
+
+  <div class="modal">
+    <div class="modal-head">
+      <span>김태양-서버 접근 권한 신청-20260…</span>
+      <span style="color:#888;font-weight:400">닫기</span>
+    </div>
+    <div class="modal-body">
+      <div class="fields">
+        <div class="field"><label>제목</label><span>김태양-서버 접근 권한 신청-202607291040</span></div>
+        <div class="field"><label>기안자</label><span>김태양</span></div>
+        <div class="field"><label>요청일시</label><span>2026.07.29 10:40</span></div>
+        <div class="field"><label>결재번호</label><span>15</span></div>
+      </div>
+      <div class="block">
+        <label>내용</label>
+        <div>김태양-서버 접근 권한 신청-202607291040</div>
+      </div>
+      <div class="block">
+        <label>상세 내용</label>
+        <div class="val" id="modalDetail"></div>
+      </div>
+      <div class="block">
+        <label>결재 코멘트</label>
+        <div style="border:1px solid #ddd;border-radius:4px;padding:10px;color:#999;font-size:13px">
+          승인/반려 코멘트를 5자 이상 입력하세요
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    ※ Slack은 HTML/테이블 UI를 그대로 그리지 않습니다. 태그는 제거하고 엔티티만 풀어 평문으로 보여줍니다.<br />
+    ※ 회색 박스는 미리보기용이며, 실제 Slack section은 박스 없이 mrkdwn 텍스트입니다.
+  </p>
+
+  <script type="module">
+    /** 실제 운영에서 보이던 패턴을 단순화한 HIWARE htmlCnts 예시 */
+    const rawHtml = `
+      <div>개별 상세 Y</div>
+      <div>제한 Y</div>
+      <div>허용 기간 2026.07.29 10:40 ~ 2026.08.04 23:59</div>
+      <div>결제 라인 *</div>
+      <div>결재자 목록 : 3건</div>
+      <table>
+        <tr><th>단계</th><th>결제 유형</th><th>결제지명</th><th>결제지 ID</th><th>결제자 그룹</th><th>직급</th></tr>
+        <tr>
+          <td>&#160;1</td>
+          <td>&#160;합의</td>
+          <td>&#160;김명수</td>
+          <td>&#160;myoungsu.kim</td>
+          <td>&lrm;SecOps&lrm;</td>
+          <td>&#160;</td>
+        </tr>
+        <tr>
+          <td>&#160;1</td>
+          <td>&#160;합의</td>
+          <td>&#160;홍길동</td>
+          <td>&#160;gildong.hong</td>
+          <td>&lrm;DevOps&lrm;</td>
+          <td>&#160;</td>
+        </tr>
+        <tr>
+          <td>&#160;2</td>
+          <td>&#160;승인</td>
+          <td>&#160;이결재</td>
+          <td>&#160;lee.apv</td>
+          <td>&lrm;Manager&lrm;</td>
+          <td>&#160;</td>
+        </tr>
+      </table>
+    `;
+
+    /** htmlToText.js 와 동일한 로직 (브라우저용 복제) */
+    function htmlToPlainText(html, maxLen = 2500) {
+      if (!html) return '(내용 없음)';
+      let text = String(html)
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<\/th>/gi, ' ')
+        .replace(/<\/td>/gi, ' ')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;|&#160;|&#x0*A0;/gi, ' ')
+        .replace(/&ensp;|&emsp;|&thinsp;/gi, ' ')
+        .replace(/&lrm;|&rlm;|&#8206;|&#8207;|&#x0*200[EF];/gi, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;|&#39;/g, "'")
+        .replace(/&#(\d+);/g, (_, n) => {
+          const code = Number(n);
+          if (code === 160) return ' ';
+          if (code === 8206 || code === 8207) return '';
+          try { return String.fromCodePoint(code); } catch { return ''; }
+        })
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => {
+          const code = Number.parseInt(h, 16);
+          if (code === 0xa0) return ' ';
+          if (code === 0x200e || code === 0x200f) return '';
+          try { return String.fromCodePoint(code); } catch { return ''; }
+        })
+        .replace(/\u00a0/g, ' ')
+        .replace(/[\u200e\u200f]/g, '')
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      if (text.length > maxLen) text = text.slice(0, maxLen) + '…';
+      return text || '(내용 없음)';
+    }
+
+    /** 예전(버그) 변환 — named &nbsp; 만 처리 */
+    function oldBroken(html) {
+      return String(html)
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<\/td>/gi, ' ')
+        .replace(/<\/th>/gi, ' ')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+    }
+
+    const before = oldBroken(rawHtml);
+    const after = htmlToPlainText(rawHtml);
+
+    document.getElementById('before').textContent = before;
+    document.getElementById('after').textContent = after;
+    document.getElementById('modalDetail').textContent = after;
+  </script>
+</body>
+</html>

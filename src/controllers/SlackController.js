@@ -15,7 +15,7 @@ import {
   mapHiwareApprovalDetail,
   parseSlackPayload,
 } from '../slack/blockKit.js';
-import { config } from '../config/index.js';
+import { needsApvUserPwd } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { TaskRejectedError } from '../lib/errors.js';
 import { slackEventLogger } from '../services/SlackEventLogger.js';
@@ -184,15 +184,15 @@ export class SlackController {
       });
       return res.status(200).send('');
     }
-    if (config.approval.requireApvUserPwd && !data.apvUserPwd?.trim()) {
-      await slackClient.updateModal(view.id, view.hash, buildErrorModal('HIWARE 결재 비밀번호를 입력해 주세요.'));
+    if (needsApvUserPwd() && !data.apvUserPwd?.trim()) {
+      await slackClient.updateModal(view.id, view.hash, buildErrorModal('HIWARE 비밀번호를 입력해 주세요.'));
       slackEventLogger.log({
         eventType: SLACK_EVENT.ACTION_VALIDATION_FAILED,
         eventStatus: SLACK_EVENT_STATUS.FAILED,
         apvApltNo,
         slackUserId: payload.user?.id,
         slackViewId: view.id,
-        errorMessage: 'HIWARE 결재 비밀번호를 입력해 주세요.',
+        errorMessage: 'HIWARE 비밀번호를 입력해 주세요.',
         metadata: { field: 'apvUserPwd' },
       });
       return res.status(200).send('');
@@ -243,7 +243,7 @@ export class SlackController {
         slackViewHash: view.hash,
         payload: {
           comment: commentCheck.value,
-          ...(config.approval.requireApvUserPwd ? { apvUserPwd: data.apvUserPwd } : {}),
+          ...(needsApvUserPwd() ? { apvUserPwd: data.apvUserPwd } : {}),
           channelId: data.channelId,
           messageTs: data.messageTs,
           actionLabel,

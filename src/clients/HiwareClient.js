@@ -73,8 +73,8 @@ export class HiwareClient {
     this.loginMode = Boolean(this.userId && this.userPwd);
     /** @type {string} 로그인 모드면 캐시(초기 비움). 정적 모드면 env 토큰 */
     this.apiToken = this.loginMode ? '' : cfg.apiToken || '';
-    // baseUrl 미설정은 validateApiConfig()가 안내하므로 import 시점에는 죽지 않게 지연 파생
-    this.authBaseUrl = this.loginMode && this.baseUrl ? deriveAuthBaseUrl(this.baseUrl) : '';
+    // 서비스 계정 로그인 + 결재자 임시 로그인 모두 Auth URL 필요
+    this.authBaseUrl = this.baseUrl ? deriveAuthBaseUrl(this.baseUrl) : '';
     /** @type {Promise<string>|null} */
     this._loginInFlight = null;
   }
@@ -103,9 +103,23 @@ export class HiwareClient {
   }
 
   async _doLogin() {
+    return this._loginWithCredentials(this.userId, this.userPwd);
+  }
+
+  /**
+   * Login Interface로 authKey 발급. this.apiToken 은 변경하지 않음.
+   * @param {string} userId
+   * @param {string} password plain password
+   * @returns {Promise<string>} authKey
+   */
+  async _loginWithCredentials(userId, password) {
     if (!this.authBaseUrl) {
       throw new AppError('HIWARE_BASE_URL 미설정 — Auth URL 파생 불가', { status: 500, code: 'HIWARE_LOGIN_ERROR' });
     }
+    if (!userId || !password) {
+      throw new AppError('HIWARE 로그인 ID/비밀번호가 필요합니다', { status: 400, code: 'HIWARE_LOGIN_ERROR' });
+    }
+
     const rk = await this._rawRequest('GET', `${this.authBaseUrl}/randomKey`, { withToken: false });
     const issueKey = rk?.content?.issueKey;
     const randomKey = rk?.content?.randomKey;
@@ -113,11 +127,11 @@ export class HiwareClient {
       throw new AppError('HIWARE randomKey 응답 이상', { status: 502, code: 'HIWARE_LOGIN_ERROR' });
     }
 
-    const encPwd = encryptPassword(this.userPwd, randomKey);
+    const encPwd = encryptPassword(password, randomKey);
     const login = await this._rawRequest('POST', `${this.authBaseUrl}/login`, {
       withToken: false,
       body: {
-        userId: this.userId,
+        userId: String(userId),
         password: encPwd,
         issueKey,
         authProviderType: 'ID/PASSWORD',
@@ -131,6 +145,18 @@ export class HiwareClient {
       throw new AppError(String(msg), { status: 502, code: 'HIWARE_LOGIN_ERROR' });
     }
     return String(authKey);
+  }
+
+  /**
+   * 결재자 본인으로 1회성 로그인 (서비스 계정 토큰 유지).
+   * @param {string} userId HIWARE userId
+   * @param {string} password
+   * @returns {Promise<string>} authKey
+   */
+  async loginAs(userId, password) {
+    const token = await this._loginWithCredentials(userId, password);
+    logger.info('HIWARE login ok (approver session)', { userId: String(userId) });
+    return token;
   }
 
   clearToken() {
@@ -168,9 +194,9 @@ export class HiwareClient {
   /**
    * @param {string} method
    * @param {string} url absolute URL
-   * @param {{ body?: object, withToken?: boolean }} opts
+   * @param {{ body?: object, withToken?: boolean, apiToken?: string }} opts
    */
-  async _rawRequest(method, url, { body, withToken = true } = {}) {
+  async _rawRequest(method, url, { body, withToken = true, apiToken } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -181,7 +207,7 @@ export class HiwareClient {
         'User-Agent': USER_AGENT,
       };
       if (withToken) {
-        headers['API-Token'] = this.apiToken;
+        headers['API-Token'] = apiToken || this.apiToken;
       }
 
       const res = await fetch(url, {
@@ -262,6 +288,16 @@ export class HiwareClient {
 
   batchApplyApv(items) {
     return this.request('POST', '/approval/aplt/applyApv', { body: items });
+  }
+
+  /**
+   * 결재자 ID/PW로 임시 로그인 후 applyApv. 서비스 계정 this.apiToken 은 건드리지 않음.
+   * @param {{ userId: string, password: string, items: object[] }} opts
+   */
+  async batchApplyApvAs({ userId, password, items }) {
+    const token = await this.loginAs(userId, password);
+    const url = `${this.baseUrl}/approval/aplt/applyApv`;
+    return this._rawRequest('POST', url, { body: items, withToken: true, apiToken: token });
   }
 }
 

@@ -10,7 +10,7 @@ import {
 import { slackMessageUpdater } from '../services/SlackMessageUpdater.js';
 import { requesterNotifier } from '../services/RequesterNotifier.js';
 import { approvalSyncService } from '../services/ApprovalSyncService.js';
-import { config } from '../config/index.js';
+import { config, needsApvUserPwd } from '../config/index.js';
 import { buildCompletedModal, buildErrorModal } from '../slack/blockKit.js';
 import { slackEventLogger } from './SlackEventLogger.js';
 import { SLACK_EVENT, SLACK_EVENT_STATUS } from '../lib/slackEventTypes.js';
@@ -54,18 +54,37 @@ export class ApprovalService {
         return { ok: false, duplicated: true };
       }
 
+      const apvUserPwd = String(payload.apvUserPwd || '').trim();
+      if (needsApvUserPwd() && !apvUserPwd) {
+        await this.#failModal(job, 'HIWARE 비밀번호를 입력해 주세요.');
+        return { ok: false, validation: true };
+      }
+
       const hiwareBody = [{
         apvApltNo: job.apv_aplt_no,
         apvApplyType,
         apvComment: payload.comment,
-        ...(config.approval.requireApvUserPwd && payload.apvUserPwd
-          ? { apvUserPwd: payload.apvUserPwd }
+        ...(apvUserPwd && (config.approval.requireApvUserPwd || config.approval.applyAsApprover)
+          ? { apvUserPwd }
           : {}),
       }];
 
       let hiwareResult;
       try {
-        hiwareResult = await hiwareClient.batchApplyApv(hiwareBody);
+        if (config.approval.applyAsApprover) {
+          const hiwareUserId = approver.hiware_user_id;
+          if (!hiwareUserId) {
+            await this.#failModal(job, '결재자 HIWARE 계정 매핑이 없습니다.');
+            return { ok: false, validation: true };
+          }
+          hiwareResult = await hiwareClient.batchApplyApvAs({
+            userId: hiwareUserId,
+            password: apvUserPwd,
+            items: hiwareBody,
+          });
+        } else {
+          hiwareResult = await hiwareClient.batchApplyApv(hiwareBody);
+        }
       } catch (err) {
         await approvalApproverRepository.updateStatus(approver.id, { approver_status: 'ERROR' }, conn);
         await this.#failModal(job, err.message || 'HIWARE 결재 처리 실패');
