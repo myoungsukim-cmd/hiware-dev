@@ -15,7 +15,7 @@ import {
   mapHiwareApprovalDetail,
   parseSlackPayload,
 } from '../slack/blockKit.js';
-import { needsApvUserPwd } from '../config/index.js';
+import { needsApvUserPwd, needsMfaOtp } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { TaskRejectedError } from '../lib/errors.js';
 import { slackEventLogger } from '../services/SlackEventLogger.js';
@@ -244,6 +244,7 @@ export class SlackController {
         payload: {
           comment: commentCheck.value,
           ...(needsApvUserPwd() ? { apvUserPwd: data.apvUserPwd } : {}),
+          ...(needsMfaOtp() && data.mfaOtp?.trim() ? { mfaOtp: data.mfaOtp.trim() } : {}),
           channelId: data.channelId,
           messageTs: data.messageTs,
           actionLabel,
