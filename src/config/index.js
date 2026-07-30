@@ -64,6 +64,8 @@ export const config = {
     userPwd: env('HIWARE_USER_PWD', ''),
     insecure: envBool('HIWARE_INSECURE', true),
     timeoutMs: envInt('HIWARE_TIMEOUT_MS', 120000),
+    /** Login Interface v6.0.2+ 필수 Client IP (앱→HIWARE 출발지, 예: 172.25.2.201) */
+    loginIpAddress: env('HIWARE_LOGIN_IP_ADDRESS', ''),
   },
 
   slack: {
@@ -94,6 +96,11 @@ export const config = {
     applyAsApprover: envBool('APPROVAL_APPLY_AS_APPROVER', true),
     /** true=Modal 비밀번호를 applyApv body(apvUserPwd)에도 포함. applyAsApprover면 로그인에도 사용 */
     requireApvUserPwd: envBool('APPROVAL_REQUIRE_APV_USER_PWD', false),
+    /**
+     * true=결재자 로그인 시 2차 인증(MFA) 지원.
+     * Google OTP / HI-OTP(code 08) 우선. Modal에 OTP 입력란 표시.
+     */
+    mfaGoogleOtp: envBool('APPROVAL_MFA_GOOGLE_OTP', false),
   },
 
   scheduler: {
@@ -117,6 +124,11 @@ export const config = {
 /** Modal/승인 시 HIWARE 비밀번호가 필요한지 (결재자 로그인 또는 apvUserPwd 정책) */
 export function needsApvUserPwd() {
   return config.approval.applyAsApprover || config.approval.requireApvUserPwd;
+}
+
+/** Modal에 Google OTP(HI-OTP) 입력란을 표시할지 */
+export function needsMfaOtp() {
+  return config.approval.applyAsApprover && config.approval.mfaGoogleOtp;
 }
 
 export function validateApiConfig() {
