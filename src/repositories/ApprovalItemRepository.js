@@ -32,7 +32,7 @@ export class ApprovalItemRepository {
         apv_reflt_state_name = VALUES(apv_reflt_state_name),
         summary_contents = VALUES(summary_contents),
         raw_json = VALUES(raw_json),
-        status = IF(status IN ('APPROVED','REJECTED','CANCELED'), status, 'IN_PROGRESS')`,
+        status = IF(status IN ('REJECTED','CANCELED'), status, 'IN_PROGRESS')`,
       [
         row.apv_aplt_no,
         row.apv_title,
