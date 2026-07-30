@@ -80,6 +80,7 @@ export class ApprovalService {
           hiwareResult = await hiwareClient.batchApplyApvAs({
             userId: hiwareUserId,
             password: apvUserPwd,
+            otp: String(payload.mfaOtp || '').trim() || undefined,
             items: hiwareBody,
           });
         } else {
