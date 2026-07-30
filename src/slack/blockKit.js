@@ -1,4 +1,4 @@
-import { config, needsApvUserPwd } from '../config/index.js';
+import { config, needsApvUserPwd, needsMfaOtp } from '../config/index.js';
 import { htmlToPlainText, truncate } from './htmlToText.js';
 
 /** @typedef {object} ApprovalDetail
@@ -144,6 +144,22 @@ export function buildApprovalDetailModal(detail, { channelId, messageTs, slackUs
                 text: config.approval.applyAsApprover
                   ? '본인 HIWARE 로그인 비밀번호 (DB/로그 저장 안 함)'
                   : '결재 비밀번호 (DB/로그 저장 안 함)',
+              },
+            },
+          }]
+        : []),
+      ...(needsMfaOtp()
+        ? [{
+            type: 'input',
+            block_id: 'otp_block',
+            optional: true,
+            label: { type: 'plain_text', text: 'Google OTP (HI-OTP)' },
+            element: {
+              type: 'plain_text_input',
+              action_id: 'otp_input',
+              placeholder: {
+                type: 'plain_text',
+                text: 'Authenticator 6자리 (2차 인증 시 필수, 없으면 비워도 됨)',
               },
             },
           }]
@@ -387,7 +403,8 @@ export function extractModalActionValues(view) {
   const meta = JSON.parse(view?.private_metadata || '{}');
   const comment = view?.state?.values?.approval_comment_block?.approval_comment?.value || '';
   const apvUserPwd = view?.state?.values?.password_block?.password_input?.value || '';
-  return { ...meta, comment, apvUserPwd };
+  const mfaOtp = view?.state?.values?.otp_block?.otp_input?.value || '';
+  return { ...meta, comment, apvUserPwd, mfaOtp };
 }
 
 export function parseSlackPayload(body) {
