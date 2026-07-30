@@ -48,26 +48,43 @@ export class ApprovalSyncService {
     return items;
   }
 
-  /** 승인 후 최종 여부 — HIWARE 상세 + intray 잔존 여부 */
-  async isApprovalFinal(apvApltNo, hiwareResultMessage = '') {
-    if (/완료/.test(hiwareResultMessage)) return true;
+  /**
+   * 승인 후 최종 여부.
+   * applyApv 성공 문구 "결재가 완료되었습니다"(00)는 중간 step에도 동일 → 사용 금지.
+   * 누군가의 intray에 남아 있으면 진행 중, 없으면 종료로 판단.
+   */
+  async isApprovalFinal(apvApltNo, _hiwareResultMessage = '') {
     try {
-      const raw = await hiwareClient.getApprovalDetail(apvApltNo);
-      const c = raw?.content;
-      const stateNm = c?.apvApltStateCodeNm || '';
-      if (/완료/.test(stateNm) || c?.apvApltStateCode === '05') return true;
-
-      const mappings = await slackUserMappingRepository.findAllMapped();
-      for (const m of mappings) {
-        const intray = await hiwareClient.getIntray({ userNo: m.hiware_user_no, limit: 50 });
-        if ((intray?.content || []).some((r) => String(r.apvApltNo) === String(apvApltNo))) {
-          return false;
-        }
+      if (await this.#existsInAnyIntray(apvApltNo)) {
+        return false;
       }
+
+      const raw = await hiwareClient.getApprovalDetail(apvApltNo);
+      const c = raw?.content?.content ?? raw?.content;
+      const stateCode = String(c?.apvApltStateCode || '');
+      const stateNm = String(c?.apvApltStateCodeNm || '');
+
+      if (stateCode === '05') return true;
+      if (/진행|대기|상신/.test(stateNm)) return false;
+      if (/반려/.test(stateNm)) return true;
+
+      // intray 비어 있고 진행 중 단서 없음 → 최종
       return true;
     } catch {
+      // 조회 실패 시 최종로 단정하지 않음 (2차 DM 기회 유지)
       return false;
     }
+  }
+
+  async #existsInAnyIntray(apvApltNo) {
+    const mappings = await slackUserMappingRepository.findAllMapped();
+    for (const m of mappings) {
+      const intray = await hiwareClient.getIntray({ userNo: m.hiware_user_no, limit: 50 });
+      if ((intray?.content || []).some((r) => String(r.apvApltNo) === String(apvApltNo))) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
