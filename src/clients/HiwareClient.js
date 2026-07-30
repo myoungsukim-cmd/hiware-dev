@@ -70,6 +70,7 @@ export class HiwareClient {
     this.userPwd = cfg.userPwd || '';
     this.insecure = cfg.insecure;
     this.timeoutMs = cfg.timeoutMs;
+    this.loginIpAddress = cfg.loginIpAddress || '';
     this.loginMode = Boolean(this.userId && this.userPwd);
     /** @type {string} 로그인 모드면 캐시(초기 비움). 정적 모드면 env 토큰 */
     this.apiToken = this.loginMode ? '' : cfg.apiToken || '';
@@ -103,16 +104,21 @@ export class HiwareClient {
   }
 
   async _doLogin() {
-    return this._loginWithCredentials(this.userId, this.userPwd);
+    const result = await this._loginWithCredentials(this.userId, this.userPwd, { allowMfa: false });
+    if (!result.authKey) {
+      throw new AppError(
+        '서비스 계정에 2차 인증(MFA)이 걸려 있습니다. MFA 없는 연동 계정을 사용하세요.',
+        { status: 502, code: 'HIWARE_LOGIN_ERROR' }
+      );
+    }
+    return result.authKey;
   }
 
   /**
-   * Login Interface로 authKey 발급. this.apiToken 은 변경하지 않음.
-   * @param {string} userId
-   * @param {string} password plain password
-   * @returns {Promise<string>} authKey
+   * Login Interface. this.apiToken 은 변경하지 않음.
+   * @returns {Promise<{ authKey?: string, mfaRequired?: boolean, temporaryAccessKey?: string, currentStep?: number, factors?: object[] }>}
    */
-  async _loginWithCredentials(userId, password) {
+  async _loginWithCredentials(userId, password, { allowMfa = false } = {}) {
     if (!this.authBaseUrl) {
       throw new AppError('HIWARE_BASE_URL 미설정 — Auth URL 파생 불가', { status: 500, code: 'HIWARE_LOGIN_ERROR' });
     }
@@ -128,35 +134,159 @@ export class HiwareClient {
     }
 
     const encPwd = encryptPassword(password, randomKey);
+    const body = {
+      userId: String(userId),
+      password: encPwd,
+      issueKey,
+      authProviderType: 'ID/PASSWORD',
+      authProviderId: 'hiware',
+    };
+    if (this.loginIpAddress) {
+      body.ipAddress = String(this.loginIpAddress);
+    }
+
     const login = await this._rawRequest('POST', `${this.authBaseUrl}/login`, {
       withToken: false,
-      body: {
-        userId: String(userId),
-        password: encPwd,
-        issueKey,
-        authProviderType: 'ID/PASSWORD',
-        authProviderId: 'hiware',
-      },
+      body,
     });
 
-    const authKey = login?.content?.authKey;
-    if (!authKey) {
-      const msg = authFailureMessage(login) || 'HIWARE login failed';
-      throw new AppError(String(msg), { status: 502, code: 'HIWARE_LOGIN_ERROR' });
+    const content = login?.content ?? {};
+
+    // HI-OTP 미등록 등
+    if (
+      content.typeCode === '08'
+      || String(login?.contentSimpleType || '').includes('RegisterOtp')
+      || String(content.type || '').includes('RegisterOtp')
+    ) {
+      throw new AppError(
+        'HI-OTP(Google OTP)가 미등록 상태입니다. HIWARE에서 OTP를 먼저 등록하세요.',
+        { status: 502, code: 'HIWARE_OTP_NOT_REGISTERED' }
+      );
     }
-    return String(authKey);
+
+    if (content.authKey) {
+      return { authKey: String(content.authKey) };
+    }
+
+    if (content.temporaryAccessKey) {
+      if (!allowMfa) {
+        throw new AppError(
+          'HIWARE 2차 인증(MFA)이 필요합니다. APPROVAL_MFA_GOOGLE_OTP=true 후 OTP를 입력하세요.',
+          { status: 502, code: 'HIWARE_MFA_REQUIRED' }
+        );
+      }
+      return {
+        mfaRequired: true,
+        temporaryAccessKey: String(content.temporaryAccessKey),
+        currentStep: Number(content.currentStep) || 1,
+        factors: Array.isArray(content.factors) ? content.factors : [],
+        timeout: content.timeout,
+      };
+    }
+
+    const msg = authFailureMessage(login) || 'HIWARE login failed';
+    throw new AppError(String(msg), { status: 502, code: 'HIWARE_LOGIN_ERROR' });
   }
 
   /**
-   * 결재자 본인으로 1회성 로그인 (서비스 계정 토큰 유지).
-   * @param {string} userId HIWARE userId
-   * @param {string} password
+   * 결재자 본인 로그인 (+ 옵션 MFA). 서비스 계정 토큰 유지.
+   * @param {{ userId: string, password: string, otp?: string }} opts
    * @returns {Promise<string>} authKey
    */
+  async loginAsApprover({ userId, password, otp }) {
+    const allowMfa = Boolean(config.approval?.mfaGoogleOtp);
+    const result = await this._loginWithCredentials(userId, password, { allowMfa });
+
+    if (result.authKey) {
+      logger.info('HIWARE login ok (approver session)', { userId: String(userId), mfa: false });
+      return result.authKey;
+    }
+
+    if (!result.mfaRequired) {
+      throw new AppError('HIWARE login failed', { status: 502, code: 'HIWARE_LOGIN_ERROR' });
+    }
+
+    const authCode = String(otp || '').trim();
+    if (!authCode) {
+      throw new AppError('Google OTP(인증번호)를 입력해 주세요.', {
+        status: 400,
+        code: 'HIWARE_OTP_REQUIRED',
+      });
+    }
+
+    const factor = pickMfaFactor(result.factors);
+    if (!factor) {
+      throw new AppError('사용 가능한 2차 인증 수단이 없습니다.', {
+        status: 502,
+        code: 'HIWARE_MFA_NO_FACTOR',
+      });
+    }
+
+    const type = String(factor.code ?? factor.type ?? '08');
+    if (String(factor.preProcess || '') === 'SendOtp') {
+      throw new AppError(
+        'EMAIL/SMS OTP는 아직 지원하지 않습니다. HI-OTP(Google OTP, code 08) 계정을 사용하세요.',
+        { status: 502, code: 'HIWARE_MFA_UNSUPPORTED' }
+      );
+    }
+
+    const verified = await this.additionalVerify({
+      type,
+      temporaryAccessKey: result.temporaryAccessKey,
+      stepNumber: result.currentStep || 1,
+      authCode,
+    });
+
+    const authKey = verified?.content?.authKey;
+    if (!authKey) {
+      const msg = authFailureMessage(verified) || 'OTP 검증 실패';
+      throw new AppError(String(msg), { status: 502, code: 'HIWARE_OTP_VERIFY_ERROR' });
+    }
+
+    logger.info('HIWARE login ok (approver session)', {
+      userId: String(userId),
+      mfa: true,
+      factor: type,
+    });
+    return String(authKey);
+  }
+
+  /** @deprecated use loginAsApprover */
   async loginAs(userId, password) {
-    const token = await this._loginWithCredentials(userId, password);
-    logger.info('HIWARE login ok (approver session)', { userId: String(userId) });
-    return token;
+    return this.loginAsApprover({ userId, password });
+  }
+
+  /**
+   * @param {{ type: string, accessToken: string, langCode?: string }} opts
+   */
+  async sendOtp({ type, accessToken, langCode = '' }) {
+    return this._rawRequest('POST', `${this.authBaseUrl}/sendOtp`, {
+      withToken: false,
+      body: {
+        type: String(type),
+        keyType: 'TEMPORARY_ACCESS_KEY',
+        accessToken: String(accessToken),
+        langCode: langCode || '',
+      },
+    });
+  }
+
+  /**
+   * @param {{ type: string, temporaryAccessKey: string, stepNumber: number, authCode: string, issueKey?: string }} opts
+   */
+  async additionalVerify({ type, temporaryAccessKey, stepNumber, authCode, issueKey }) {
+    const parameters = { authCode: String(authCode) };
+    if (issueKey) parameters.issueKey = String(issueKey);
+
+    return this._rawRequest('POST', `${this.authBaseUrl}/additionalVerify`, {
+      withToken: false,
+      body: {
+        type: String(type),
+        temporaryAccessKey: String(temporaryAccessKey),
+        stepNumber: Number(stepNumber) || 1,
+        parameters,
+      },
+    });
   }
 
   clearToken() {
@@ -291,14 +421,21 @@ export class HiwareClient {
   }
 
   /**
-   * 결재자 ID/PW로 임시 로그인 후 applyApv. 서비스 계정 this.apiToken 은 건드리지 않음.
-   * @param {{ userId: string, password: string, items: object[] }} opts
+   * 결재자 ID/PW(+OTP)로 임시 로그인 후 applyApv. 서비스 계정 this.apiToken 은 건드리지 않음.
+   * @param {{ userId: string, password: string, otp?: string, items: object[] }} opts
    */
-  async batchApplyApvAs({ userId, password, items }) {
-    const token = await this.loginAs(userId, password);
+  async batchApplyApvAs({ userId, password, otp, items }) {
+    const token = await this.loginAsApprover({ userId, password, otp });
     const url = `${this.baseUrl}/approval/aplt/applyApv`;
     return this._rawRequest('POST', url, { body: items, withToken: true, apiToken: token });
   }
+}
+
+/** HI-OTP(08) 우선, 없으면 첫 factor */
+function pickMfaFactor(factors) {
+  const list = Array.isArray(factors) ? factors : [];
+  const hiOtp = list.find((f) => String(f?.code) === '08' || /otp/i.test(String(f?.name || '')));
+  return hiOtp || list[0] || null;
 }
 
 export const hiwareClient = new HiwareClient();
