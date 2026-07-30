@@ -1,4 +1,4 @@
-# HIWARE × Slack 결재 연동 — 발표 정리
+# HIWARE × Slack 결재 연동
 
 > **한 줄 요약**  
 > HIWARE 결재를 Slack DM/Modal로 처리하는 Node.js 백엔드.  
