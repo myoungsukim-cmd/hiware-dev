@@ -27,7 +27,7 @@ export class ApprovalService {
     const actionType = job.job_type === 'APPROVAL_REJECT' ? 'Reject' : 'Assent';
     const apvApplyType = actionType;
 
-    return withTransaction(async (conn) => {
+    const result = await withTransaction(async (conn) => {
       const item = await approvalItemRepository.findByApvNoForUpdate(job.apv_aplt_no, conn);
       if (!item) {
         throw new Error(`결재 문서 없음: ${job.apv_aplt_no}`);
@@ -165,20 +165,36 @@ export class ApprovalService {
       const updatedItem = await approvalItemRepository.findByApvNo(job.apv_aplt_no, conn);
       const updatedActor = await approvalApproverRepository.findById(approver.id, conn);
 
-      await slackMessageUpdater.updateSlackMessagesAfterAction({
+      return {
+        ok: true,
+        hiwareResult,
+        notifySlack: true,
         apvApltNo: job.apv_aplt_no,
         actorApproverId: approver.id,
         actionType,
         comment: payload.comment,
-        item: updatedItem,
-        actor: updatedActor,
+        updatedItem,
+        updatedActor,
+        actionLabel: payload.actionLabel || (actionType === 'Reject' ? '반려' : '승인'),
+      };
+    });
+
+    // Slack 사이드이펙트는 커밋 이후 실행 (미커밋 상태 재조회로 기안자 DM이 스킵되던 문제 방지)
+    if (result?.notifySlack) {
+      await slackMessageUpdater.updateSlackMessagesAfterAction({
+        apvApltNo: result.apvApltNo,
+        actorApproverId: result.actorApproverId,
+        actionType: result.actionType,
+        comment: result.comment,
+        item: result.updatedItem,
+        actor: result.updatedActor,
       });
 
-      if (['APPROVED', 'REJECTED'].includes(updatedItem.status)) {
-        await requesterNotifier.notifyRequesterIfFinal(job.apv_aplt_no);
+      if (['APPROVED', 'REJECTED'].includes(result.updatedItem.status)) {
+        await requesterNotifier.notifyRequesterIfFinal(result.apvApltNo);
       }
 
-      await this.#successModal(job, payload.actionLabel || (actionType === 'Reject' ? '반려' : '승인'));
+      await this.#successModal(job, result.actionLabel);
       slackEventLogger.log({
         eventType: SLACK_EVENT.ACTION_QUEUED,
         eventStatus: SLACK_EVENT_STATUS.SUCCESS,
@@ -188,8 +204,9 @@ export class ApprovalService {
         slackActionJobId: job.id,
         metadata: { actionType, result: 'completed' },
       });
-      return { ok: true, hiwareResult };
-    });
+    }
+
+    return result;
   }
 
   async #successModal(job, actionLabel) {
