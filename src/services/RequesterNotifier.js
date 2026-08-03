@@ -13,11 +13,31 @@ import { SLACK_EVENT, SLACK_EVENT_STATUS } from '../lib/slackEventTypes.js';
 export class RequesterNotifier {
   async notifyRequesterIfFinal(apvApltNo) {
     const item = await approvalItemRepository.findByApvNo(apvApltNo);
-    if (!item || !['APPROVED', 'REJECTED'].includes(item.status)) return false;
-    if (await slackRequesterNotificationRepository.existsFinal(apvApltNo)) return false;
+    if (!item || !['APPROVED', 'REJECTED'].includes(item.status)) {
+      logger.info('requester notify skipped — not final', {
+        apvApltNo,
+        status: item?.status ?? null,
+        requester_notify_status: item?.requester_notify_status ?? null,
+      });
+      return false;
+    }
+    if (await slackRequesterNotificationRepository.existsFinal(apvApltNo)) {
+      logger.info('requester notify skipped — already notified', {
+        apvApltNo,
+        status: item.status,
+        requester_notify_status: item.requester_notify_status,
+      });
+      return false;
+    }
 
     const mapping = await slackUserMappingRepository.findByHiwareUserNo(item.apv_req_user_no);
     if (!mapping) {
+      logger.info('requester notify skipped — no slack mapping', {
+        apvApltNo,
+        status: item.status,
+        requester_notify_status: item.requester_notify_status,
+        hiwareUserNo: item.apv_req_user_no,
+      });
       await approvalItemRepository.updateStatus(apvApltNo, { requester_notify_status: 'SKIPPED_NO_MAPPING' });
       slackEventLogger.log({
         eventType: SLACK_EVENT.REQUESTER_DM_SKIPPED,
