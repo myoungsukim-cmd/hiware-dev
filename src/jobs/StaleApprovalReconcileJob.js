@@ -9,6 +9,7 @@ export class StaleApprovalReconcileJob {
     await approvalSyncService.syncFromIntray();
     const active = await approvalItemRepository.findActiveItems();
     let reconciled = 0;
+    let requesterRetried = 0;
 
     for (const item of active) {
       try {
@@ -36,7 +37,23 @@ export class StaleApprovalReconcileJob {
       }
     }
 
-    logger.info('StaleApprovalReconcileJob done', { active: active.length, reconciled });
+    // 이미 최종 처리됐지만 기안자 DM이 누락된 건 재시도
+    const pendingNotify = await approvalItemRepository.findPendingRequesterNotify();
+    for (const item of pendingNotify) {
+      try {
+        const sent = await requesterNotifier.notifyRequesterIfFinal(item.apv_aplt_no);
+        if (sent) requesterRetried += 1;
+      } catch (err) {
+        logger.warn('requester notify retry failed', { apv: item.apv_aplt_no, error: err.message });
+      }
+    }
+
+    logger.info('StaleApprovalReconcileJob done', {
+      active: active.length,
+      reconciled,
+      pendingNotify: pendingNotify.length,
+      requesterRetried,
+    });
     return reconciled;
   }
 }
