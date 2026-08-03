@@ -69,6 +69,17 @@ export class ApprovalItemRepository {
     );
     return rows;
   }
+
+  /** 최종 처리됐지만 기안자 DM이 아직 안 간 건 */
+  async findPendingRequesterNotify() {
+    const pool = getPool();
+    const [rows] = await pool.query(
+      `SELECT * FROM approval_items
+       WHERE status IN ('APPROVED','REJECTED')
+         AND requester_notify_status = 'PENDING'`
+    );
+    return rows;
+  }
 }
 
 export const approvalItemRepository = new ApprovalItemRepository();
