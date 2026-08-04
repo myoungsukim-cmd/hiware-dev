@@ -47,6 +47,21 @@ export class SlackActionJobWorker {
       try {
         await approvalActionLogRepository.markProcessingByJobId(job.id);
         const result = await approvalActionService.processJob(job);
+        // 비밀번호/OTP 오입력: throw 없이 반환됨 → 재시도 없이 종료
+        if (result?.authFailed) {
+          await slackActionJobRepository.fail(job.id, result.error || 'auth failed', false);
+          await approvalActionLogRepository.markFailedByJobId(
+            job.id,
+            'FAILED',
+            result.error || 'auth failed'
+          );
+          logger.warn('worker job auth failed — no retry', {
+            jobId: job.id,
+            apvApltNo: job.apv_aplt_no,
+            error: result.error,
+          });
+          continue;
+        }
         await slackActionJobRepository.complete(job.id, result);
       } catch (err) {
         // 비밀번호/OTP 오입력은 재시도하지 않음 (HIWARE 5회 실패 잠금 방지)
