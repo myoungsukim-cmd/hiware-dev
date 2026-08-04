@@ -139,5 +139,8 @@ function escapeRegExp(s) {
 export function truncate(text, maxLen = 300) {
   if (!text) return '';
   const s = String(text);
-  return s.length > maxLen ? s.slice(0, maxLen) + '…' : s;
+  if (s.length <= maxLen) return s;
+  // ellipsis 포함해 maxLen 이하로 (Slack modal title 등 24자 제한)
+  if (maxLen <= 1) return '…'.slice(0, maxLen);
+  return s.slice(0, maxLen - 1) + '…';
 }
