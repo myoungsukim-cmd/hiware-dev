@@ -1,3 +1,5 @@
+import { formatNowKstLog } from './format.js';
+
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function currentLevel() {
@@ -8,7 +10,7 @@ function currentLevel() {
 function log(level, msg, meta = undefined) {
   if (LEVELS[level] < currentLevel()) return;
   const line = {
-    ts: new Date().toISOString(),
+    ts: formatNowKstLog(),
     level,
     msg,
     ...(meta ? { meta } : {}),
