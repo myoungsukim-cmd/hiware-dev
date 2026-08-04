@@ -11,6 +11,7 @@ import { slackMessageUpdater } from '../services/SlackMessageUpdater.js';
 import { requesterNotifier } from '../services/RequesterNotifier.js';
 import { approvalSyncService } from '../services/ApprovalSyncService.js';
 import { config, needsApvUserPwd } from '../config/index.js';
+import { isNonRetryableJobError } from '../lib/errors.js';
 import { buildCompletedModal, buildErrorModal } from '../slack/blockKit.js';
 import { slackEventLogger } from './SlackEventLogger.js';
 import { SLACK_EVENT, SLACK_EVENT_STATUS } from '../lib/slackEventTypes.js';
@@ -87,8 +88,12 @@ export class ApprovalService {
           hiwareResult = await hiwareClient.batchApplyApv(hiwareBody);
         }
       } catch (err) {
-        await approvalApproverRepository.updateStatus(approver.id, { approver_status: 'ERROR' }, conn);
         await this.#failModal(job, err.message || 'HIWARE 결재 처리 실패');
+        // 비밀번호/OTP 오입력: throw 하지 않음 → Worker 재시도·계정 잠금 방지, 결재자 상태 유지(재입력 가능)
+        if (isNonRetryableJobError(err)) {
+          return { ok: false, authFailed: true, error: err.message };
+        }
+        await approvalApproverRepository.updateStatus(approver.id, { approver_status: 'ERROR' }, conn);
         throw err;
       }
 
