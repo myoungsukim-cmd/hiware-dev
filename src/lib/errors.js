@@ -43,7 +43,13 @@ export function isNonRetryableJobError(err) {
   return (
     msg.includes('invalid authcode')
     || msg.includes('invalid password')
+    || msg.includes('authcode')
+    || msg.includes('failurecount')
+    || msg.includes('failure count')
+    || msg.includes('로그인')
     || msg.includes('비밀번호')
     || msg.includes('패스워드')
+    || msg.includes('인증번호')
+    || msg.includes('otp')
   );
 }
