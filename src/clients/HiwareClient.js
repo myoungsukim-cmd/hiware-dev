@@ -145,10 +145,19 @@ export class HiwareClient {
       body.ipAddress = String(this.loginIpAddress);
     }
 
-    const login = await this._rawRequest('POST', `${this.authBaseUrl}/login`, {
-      withToken: false,
-      body,
-    });
+    let login;
+    try {
+      login = await this._rawRequest('POST', `${this.authBaseUrl}/login`, {
+        withToken: false,
+        body,
+      });
+    } catch (err) {
+      // Worker 재시도 금지용 코드로 고정 (틀린 비밀번호 등)
+      throw new AppError(err.message || 'HIWARE login failed', {
+        status: err.status || 502,
+        code: 'HIWARE_LOGIN_ERROR',
+      });
+    }
 
     const content = login?.content ?? {};
 
@@ -230,12 +239,21 @@ export class HiwareClient {
       );
     }
 
-    const verified = await this.additionalVerify({
-      type,
-      temporaryAccessKey: result.temporaryAccessKey,
-      stepNumber: result.currentStep || 1,
-      authCode,
-    });
+    let verified;
+    try {
+      verified = await this.additionalVerify({
+        type,
+        temporaryAccessKey: result.temporaryAccessKey,
+        stepNumber: result.currentStep || 1,
+        authCode,
+      });
+    } catch (err) {
+      // 틀린 OTP — Worker 재시도 시 계정 잠금되므로 재시도 금지 코드로 고정
+      throw new AppError(err.message || 'OTP 검증 실패', {
+        status: err.status || 502,
+        code: 'HIWARE_OTP_VERIFY_ERROR',
+      });
+    }
 
     const authKey = verified?.content?.authKey;
     if (!authKey) {
