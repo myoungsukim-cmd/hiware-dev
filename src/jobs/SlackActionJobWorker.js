@@ -1,4 +1,5 @@
 import { config } from '../config/index.js';
+import { isNonRetryableJobError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { slackActionJobRepository } from '../jobs/SlackActionJobRepository.js';
 import { approvalActionService } from '../services/ApprovalActionService.js';
@@ -48,14 +49,20 @@ export class SlackActionJobWorker {
         const result = await approvalActionService.processJob(job);
         await slackActionJobRepository.complete(job.id, result);
       } catch (err) {
-        const requeue = job.attempts < job.max_attempts;
+        // 비밀번호/OTP 오입력은 재시도하지 않음 (HIWARE 5회 실패 잠금 방지)
+        const requeue = !isNonRetryableJobError(err) && job.attempts < job.max_attempts;
         await slackActionJobRepository.fail(job.id, err.message, requeue);
         await approvalActionLogRepository.markFailedByJobId(
           job.id,
           requeue ? 'RETRYING' : 'FAILED',
           err.message
         );
-        logger.error('worker job failed', { jobId: job.id, requeue, error: err.message });
+        logger.error('worker job failed', {
+          jobId: job.id,
+          requeue,
+          code: err.code || null,
+          error: err.message,
+        });
       }
     }
   }
